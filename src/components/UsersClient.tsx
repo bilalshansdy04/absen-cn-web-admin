@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   UserPlus,
   KeyRound,
   Search,
   CheckCircle2,
   AlertCircle,
+  Pencil,
+  Trash2,
+  X,
 } from "lucide-react";
 
 interface UserRow {
@@ -40,6 +43,114 @@ export function UsersClient({
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  const [editCode, setEditCode] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState<
+    "sys_custodian" | "fld_coord" | "fld_member"
+  >("fld_member");
+  const [editPassword, setEditPassword] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const editDialogRef = useRef<HTMLDialogElement | null>(null);
+
+  const [deletingUser, setDeletingUser] = useState<UserRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const deleteDialogRef = useRef<HTMLDialogElement | null>(null);
+
+  useEffect(() => {
+    const d = editDialogRef.current;
+    if (!d) return;
+    if (editingUser) {
+      if (!d.open) d.showModal();
+    } else if (d.open) {
+      d.close();
+    }
+  }, [editingUser]);
+
+  useEffect(() => {
+    const d = deleteDialogRef.current;
+    if (!d) return;
+    if (deletingUser) {
+      if (!d.open) d.showModal();
+    } else if (d.open) {
+      d.close();
+    }
+  }, [deletingUser]);
+
+  function openEditModal(u: UserRow) {
+    setEditingUser(u);
+    setEditCode(u.employee_code);
+    setEditName(u.full_name);
+    setEditRole(u.role_code);
+    setEditPassword("");
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingUser) return;
+    setNotice(null);
+    setSavingEdit(true);
+    try {
+      const payload: Record<string, string> = {
+        employee_code: editCode.trim().toUpperCase(),
+        full_name: editName.trim(),
+      };
+      if (currentUserRole === "sys_custodian") {
+        payload.role_code = editRole;
+      }
+      if (editPassword.trim().length > 0) {
+        payload.new_password = editPassword;
+      }
+
+      const res = await fetch(`/api/v1/admin/users/${editingUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNotice({ type: "error", text: data.error || "Gagal menyimpan perubahan." });
+        return;
+      }
+      setNotice({
+        type: "success",
+        text: `Data akun ${payload.employee_code} berhasil diperbarui.`,
+      });
+      setEditingUser(null);
+      fetchUsers();
+    } catch {
+      setNotice({ type: "error", text: "Gagal terhubung ke server." });
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!deletingUser) return;
+    setNotice(null);
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/v1/admin/users/${deletingUser.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNotice({ type: "error", text: data.error || "Gagal menghapus akun." });
+        return;
+      }
+      setNotice({
+        type: "success",
+        text: data.message || `Akun ${deletingUser.employee_code} dihapus.`,
+      });
+      setDeletingUser(null);
+      fetchUsers();
+    } catch {
+      setNotice({ type: "error", text: "Gagal terhubung ke server." });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -343,15 +454,37 @@ export function UsersClient({
                           {u.is_active ? "Aktif" : "Nonaktif"}
                         </button>
                       </td>
-                      <td data-label="Aksi" className="px-4 py-3 text-right">
+                      <td
+                        data-label="Aksi"
+                        className="px-4 py-3 text-right whitespace-nowrap"
+                      >
                         {canManage && (
-                          <button
-                            onClick={() => handleResetPassword(u)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer"
-                          >
-                            <KeyRound className="w-3.5 h-3.5" />
-                            Reset Sandi
-                          </button>
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(u)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleResetPassword(u)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                              Reset Sandi
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingUser(u)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-medium cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Hapus
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -362,6 +495,164 @@ export function UsersClient({
           </table>
         </div>
       </div>
+
+      {/* Modal Edit Akun */}
+      <dialog
+        ref={editDialogRef}
+        {...({ closedby: "any" } as Record<string, string>)}
+        aria-labelledby="edit-user-title"
+        onClose={() => setEditingUser(null)}
+        className="photo-dialog m-auto rounded-2xl max-w-md w-[calc(100%-2rem)] p-0 overflow-hidden shadow-xl border border-slate-200 bg-white"
+      >
+        {editingUser && (
+          <form onSubmit={handleSaveEdit}>
+            <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+              <h2
+                id="edit-user-title"
+                className="font-semibold text-sm text-slate-900"
+              >
+                Edit Akun ({editingUser.employee_code})
+              </h2>
+              <button
+                type="button"
+                aria-label="Tutup modal edit"
+                onClick={() => setEditingUser(null)}
+                className="p-1 text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  ID Karyawan / Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editCode}
+                  onChange={(e) => setEditCode(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 uppercase"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Nama Lengkap
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900"
+                />
+              </div>
+              {currentUserRole === "sys_custodian" && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Peran (Role)
+                  </label>
+                  <select
+                    value={editRole}
+                    onChange={(e) =>
+                      setEditRole(
+                        e.target.value as
+                          | "sys_custodian"
+                          | "fld_coord"
+                          | "fld_member"
+                      )
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white"
+                  >
+                    <option value="fld_member">
+                      Field Member (Checker / Mobile)
+                    </option>
+                    <option value="fld_coord">
+                      Field Coordinator (Admin Kantor)
+                    </option>
+                    <option value="sys_custodian">
+                      System Custodian (Super Admin Web)
+                    </option>
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Kata Sandi Baru (Opsional)
+                </label>
+                <input
+                  type="password"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder="Kosongkan jika tidak ingin mengubah sandi"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900"
+                />
+              </div>
+            </div>
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50 cursor-pointer"
+              >
+                {savingEdit ? "Menyimpan..." : "Simpan Perubahan"}
+              </button>
+            </div>
+          </form>
+        )}
+      </dialog>
+
+      {/* Modal Konfirmasi Soft Delete */}
+      <dialog
+        ref={deleteDialogRef}
+        {...({ closedby: "any" } as Record<string, string>)}
+        aria-labelledby="delete-user-title"
+        onClose={() => setDeletingUser(null)}
+        className="photo-dialog m-auto rounded-2xl max-w-sm w-[calc(100%-2rem)] p-0 overflow-hidden shadow-xl border border-slate-200 bg-white"
+      >
+        {deletingUser && (
+          <div>
+            <div className="p-5 space-y-2">
+              <h2
+                id="delete-user-title"
+                className="font-bold text-base text-slate-900"
+              >
+                Hapus Akun {deletingUser.employee_code}?
+              </h2>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Akun <strong>{deletingUser.full_name}</strong> akan dihapus
+                secara <em>soft delete</em> (dinonaktifkan &amp; disembunyikan
+                dari daftar akun). Data log dan foto presensi historis tetap
+                tersimpan utuh.
+              </p>
+            </div>
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingUser(null)}
+                className="px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold disabled:opacity-50 cursor-pointer"
+              >
+                {deleting ? "Menghapus..." : "Ya, Hapus Akun"}
+              </button>
+            </div>
+          </div>
+        )}
+      </dialog>
     </div>
   );
 }

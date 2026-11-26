@@ -39,6 +39,7 @@ export async function ensureDb(): Promise<Client> {
           role_code TEXT NOT NULL CHECK (role_code IN ('sys_custodian', 'fld_coord', 'fld_member')),
           is_first_login INTEGER NOT NULL DEFAULT 1,
           is_active INTEGER NOT NULL DEFAULT 1,
+          deleted_at TEXT,
           created_by TEXT,
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
@@ -70,6 +71,13 @@ export async function ensureDb(): Promise<Client> {
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
       `);
+
+      // Safe migration for existing databases adding deleted_at to users
+      try {
+        await db.execute("ALTER TABLE users ADD COLUMN deleted_at TEXT");
+      } catch {
+        // Column already exists
+      }
 
       const existing = await db.execute("SELECT COUNT(*) as cnt FROM users");
       const count = Number(existing.rows[0]?.cnt ?? 0);

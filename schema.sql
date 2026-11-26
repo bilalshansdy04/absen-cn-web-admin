@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   role_code TEXT NOT NULL CHECK (role_code IN ('sys_custodian', 'fld_coord', 'fld_member')),
   is_first_login INTEGER NOT NULL DEFAULT 1,
   is_active INTEGER NOT NULL DEFAULT 1,
+  deleted_at TEXT,
   created_by TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

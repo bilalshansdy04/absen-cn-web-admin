@@ -16,11 +16,12 @@ export async function GET(req: NextRequest) {
   const search = (req.nextUrl.searchParams.get("q") || "").trim().toLowerCase();
 
   let sql = `SELECT id, employee_code, full_name, role_code, is_first_login, is_active, created_by, created_at
-             FROM users`;
+             FROM users
+             WHERE (deleted_at IS NULL OR deleted_at = '')`;
   const args: string[] = [];
 
   if (search) {
-    sql += ` WHERE LOWER(employee_code) LIKE ? OR LOWER(full_name) LIKE ?`;
+    sql += ` AND (LOWER(employee_code) LIKE ? OR LOWER(full_name) LIKE ?)`;
     args.push(`%${search}%`, `%${search}%`);
   }
   sql += ` ORDER BY created_at DESC LIMIT 200`;
