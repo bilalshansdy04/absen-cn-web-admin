@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureDb } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { requireRole, WEB_ADMIN_ROLES } from "@/lib/auth";
 import { getAttendanceDateString } from "@/lib/time";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireRole(req, ["sys_custodian", "fld_coord"]);
+  const auth = await requireRole(req, WEB_ADMIN_ROLES);
   if ("error" in auth) return auth.error;
 
   const today = getAttendanceDateString();
@@ -25,7 +25,10 @@ export async function GET(req: NextRequest) {
   // Today's summary metrics
   const [activeMembersRes, todayStatsRes] = await Promise.all([
     db.execute(
-      `SELECT COUNT(*) as total FROM users WHERE role_code = 'fld_member' AND is_active = 1`
+      `SELECT COUNT(*) as total FROM users
+       WHERE role_code IN ('fld_office', 'fld_coord', 'fld_member')
+         AND is_active = 1
+         AND (deleted_at IS NULL OR deleted_at = '')`
     ),
     db.execute({
       sql: `SELECT
