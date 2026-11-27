@@ -11,8 +11,8 @@ export default async function HomePage() {
   if (user.is_first_login) {
     redirect("/change-password");
   }
-  if (user.role_code === "fld_member") {
+  if (!["sys_custodian", "web_admin"].includes(user.role_code)) {
     redirect("/login");
   }
-  redirect("/logs");
+  redirect("/dashboard");
 }

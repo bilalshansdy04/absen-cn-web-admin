@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   UserPlus,
@@ -9,14 +10,22 @@ import {
   AlertCircle,
   Pencil,
   Trash2,
+  History,
   X,
 } from "lucide-react";
+
+type RoleCode =
+  | "sys_custodian"
+  | "web_admin"
+  | "fld_office"
+  | "fld_coord"
+  | "fld_member";
 
 interface UserRow {
   id: string;
   employee_code: string;
   full_name: string;
-  role_code: "sys_custodian" | "fld_coord" | "fld_member";
+  role_code: RoleCode;
   role_label: string;
   is_first_login: boolean;
   is_active: boolean;
@@ -26,7 +35,7 @@ interface UserRow {
 export function UsersClient({
   currentUserRole,
 }: {
-  currentUserRole: "sys_custodian" | "fld_coord" | "fld_member";
+  currentUserRole: RoleCode;
 }) {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
@@ -34,9 +43,7 @@ export function UsersClient({
 
   const [employeeCode, setEmployeeCode] = useState("");
   const [fullName, setFullName] = useState("");
-  const [roleCode, setRoleCode] = useState<
-    "sys_custodian" | "fld_coord" | "fld_member"
-  >("fld_member");
+  const [roleCode, setRoleCode] = useState<RoleCode>("fld_member");
   const [submitting, setSubmitting] = useState(false);
 
   const [notice, setNotice] = useState<{
@@ -47,9 +54,7 @@ export function UsersClient({
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const [editCode, setEditCode] = useState("");
   const [editName, setEditName] = useState("");
-  const [editRole, setEditRole] = useState<
-    "sys_custodian" | "fld_coord" | "fld_member"
-  >("fld_member");
+  const [editRole, setEditRole] = useState<RoleCode>("fld_member");
   const [editPassword, setEditPassword] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const editDialogRef = useRef<HTMLDialogElement | null>(null);
@@ -95,10 +100,8 @@ export function UsersClient({
       const payload: Record<string, string> = {
         employee_code: editCode.trim().toUpperCase(),
         full_name: editName.trim(),
+        role_code: editRole,
       };
-      if (currentUserRole === "sys_custodian") {
-        payload.role_code = editRole;
-      }
       if (editPassword.trim().length > 0) {
         payload.new_password = editPassword;
       }
@@ -181,8 +184,7 @@ export function UsersClient({
         body: JSON.stringify({
           employee_code: employeeCode.trim().toUpperCase(),
           full_name: fullName.trim(),
-          role_code:
-            currentUserRole === "sys_custodian" ? roleCode : "fld_member",
+          role_code: roleCode,
         }),
       });
       const data = await res.json();
@@ -307,31 +309,23 @@ export function UsersClient({
               Peran (Role)
             </label>
             <select
-              value={
-                currentUserRole === "sys_custodian" ? roleCode : "fld_member"
-              }
-              onChange={(e) =>
-                setRoleCode(
-                  e.target.value as
-                    | "sys_custodian"
-                    | "fld_coord"
-                    | "fld_member",
-                )
-              }
-              disabled={currentUserRole !== "sys_custodian"}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white disabled:bg-slate-100"
+              value={roleCode}
+              onChange={(e) => setRoleCode(e.target.value as RoleCode)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white"
             >
               <option value="fld_member">
-                Field Member (Checker / Mobile)
+                Operasional / Checker (Mobile)
+              </option>
+              <option value="fld_coord">
+                Admin Operasional (Mobile)
+              </option>
+              <option value="fld_office">
+                Admin Kantor (Mobile)
               </option>
               {currentUserRole === "sys_custodian" && (
                 <>
-                  <option value="fld_coord">
-                    Field Coordinator (Admin Kantor)
-                  </option>
-                  <option value="sys_custodian">
-                    System Custodian (Admin Web)
-                  </option>
+                  <option value="web_admin">Admin Web (Web)</option>
+                  <option value="sys_custodian">Super Admin (Web)</option>
                 </>
               )}
             </select>
@@ -416,7 +410,9 @@ export function UsersClient({
                 users.map((u) => {
                   const canManage =
                     currentUserRole === "sys_custodian" ||
-                    u.role_code === "fld_member";
+                    ["fld_office", "fld_coord", "fld_member"].includes(
+                      u.role_code
+                    );
                   return (
                     <tr key={u.id} className="hover:bg-slate-50">
                       <th
@@ -458,34 +454,43 @@ export function UsersClient({
                         data-label="Aksi"
                         className="px-4 py-3 text-right whitespace-nowrap"
                       >
-                        {canManage && (
-                          <div className="inline-flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(u)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleResetPassword(u)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer"
-                            >
-                              <KeyRound className="w-3.5 h-3.5" />
-                              Reset Sandi
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeletingUser(u)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-medium cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              Hapus
-                            </button>
-                          </div>
-                        )}
+                        <div className="inline-flex items-center gap-1.5">
+                          <Link
+                            href={`/users/${u.id}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                            Histori
+                          </Link>
+                          {canManage && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(u)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleResetPassword(u)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer"
+                              >
+                                <KeyRound className="w-3.5 h-3.5" />
+                                Reset Sandi
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingUser(u)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-medium cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Hapus
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -547,35 +552,30 @@ export function UsersClient({
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900"
                 />
               </div>
-              {currentUserRole === "sys_custodian" && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Peran (Role)
-                  </label>
-                  <select
-                    value={editRole}
-                    onChange={(e) =>
-                      setEditRole(
-                        e.target.value as
-                          | "sys_custodian"
-                          | "fld_coord"
-                          | "fld_member"
-                      )
-                    }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white"
-                  >
-                    <option value="fld_member">
-                      Field Member (Checker / Mobile)
-                    </option>
-                    <option value="fld_coord">
-                      Field Coordinator (Admin Kantor)
-                    </option>
-                    <option value="sys_custodian">
-                      System Custodian (Super Admin Web)
-                    </option>
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Peran (Role)
+                </label>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as RoleCode)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white"
+                >
+                  <option value="fld_member">
+                    Operasional / Checker (Mobile)
+                  </option>
+                  <option value="fld_coord">
+                    Admin Operasional (Mobile)
+                  </option>
+                  <option value="fld_office">Admin Kantor (Mobile)</option>
+                  {currentUserRole === "sys_custodian" && (
+                    <>
+                      <option value="web_admin">Admin Web (Web)</option>
+                      <option value="sys_custodian">Super Admin (Web)</option>
+                    </>
+                  )}
+                </select>
+              </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   Kata Sandi Baru (Opsional)

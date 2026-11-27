@@ -37,7 +37,7 @@ export default function ChangePasswordPage() {
         setError(data.error || "Gagal memperbarui kata sandi.");
         return;
       }
-      router.push("/logs");
+      router.push("/dashboard");
       router.refresh();
     } catch {
       setError("Tidak dapat terhubung ke server.");

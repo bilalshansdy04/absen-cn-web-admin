@@ -34,7 +34,7 @@ export default function LoginPage() {
       if (data.user?.is_first_login) {
         router.push("/change-password");
       } else {
-        router.push("/logs");
+        router.push("/dashboard");
       }
       router.refresh();
     } catch {

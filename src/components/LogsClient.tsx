@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import * as XLSX from "xlsx";
 import {
   Download,
@@ -10,11 +11,15 @@ import {
   Clock,
   LogOut as LogOutIcon,
   Image as ImageIcon,
+  Eye,
+  Trash2,
+  MapPin,
   X,
 } from "lucide-react";
 
 interface AttendanceLog {
   id: string;
+  user_id: string;
   employee_code: string;
   full_name: string;
   attendance_date: string;
@@ -43,7 +48,21 @@ function formatWibTime(iso: string | null): string {
   return match ? `${match[1]} WIB` : iso;
 }
 
-export function LogsClient({ defaultDate }: { defaultDate: string }) {
+function computeDurationLabel(inIso: string | null, outIso: string | null): string {
+  if (!inIso || !outIso) return "-";
+  const diffMs = new Date(outIso).getTime() - new Date(inIso).getTime();
+  if (!Number.isFinite(diffMs) || diffMs < 0) return "-";
+  const mins = Math.round(diffMs / 60000);
+  return `${Math.floor(mins / 60)} jam ${mins % 60} mnt`;
+}
+
+export function LogsClient({
+  defaultDate,
+  userRole = "web_admin",
+}: {
+  defaultDate: string;
+  userRole?: string;
+}) {
   const [startDate, setStartDate] = useState(defaultDate);
   const [endDate, setEndDate] = useState(defaultDate);
   const [search, setSearch] = useState("");
@@ -57,16 +76,24 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
     checked_out_today: 0,
   });
   const [loading, setLoading] = useState(true);
+
   const [previewPhoto, setPreviewPhoto] = useState<{
     fileId: string;
     title: string;
   } | null>(null);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
 
+  const [detailLog, setDetailLog] = useState<AttendanceLog | null>(null);
+  const detailDialogRef = useRef<HTMLDialogElement | null>(null);
+
+  const [deletingLog, setDeletingLog] = useState<AttendanceLog | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const deleteDialogRef = useRef<HTMLDialogElement | null>(null);
+
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-
     if (previewPhoto) {
       if (!dialog.open) dialog.showModal();
     } else if (dialog.open) {
@@ -75,10 +102,28 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
   }, [previewPhoto]);
 
   useEffect(() => {
+    const dialog = detailDialogRef.current;
+    if (!dialog) return;
+    if (detailLog) {
+      if (!dialog.open) dialog.showModal();
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  }, [detailLog]);
+
+  useEffect(() => {
+    const dialog = deleteDialogRef.current;
+    if (!dialog) return;
+    if (deletingLog) {
+      if (!dialog.open) dialog.showModal();
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  }, [deletingLog]);
+
+  useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-
-    // Fallback for browsers without closedBy support (e.g., Safari)
     if (!("closedBy" in HTMLDialogElement.prototype)) {
       const handleClick = (event: MouseEvent) => {
         if (event.target !== dialog) return;
@@ -88,9 +133,7 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
           event.clientY <= rect.top + rect.height &&
           rect.left <= event.clientX &&
           event.clientX <= rect.left + rect.width;
-        if (!isDialogContent) {
-          dialog.close();
-        }
+        if (!isDialogContent) dialog.close();
       };
       dialog.addEventListener("click", handleClick);
       return () => dialog.removeEventListener("click", handleClick);
@@ -112,7 +155,7 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
       if (res.ok) {
         const data = await res.json();
         setLogs(data.logs || []);
-        setMetrics(data.metrics || metrics);
+        if (data.metrics) setMetrics(data.metrics);
         setTotalPages(data.pagination?.total_pages || 1);
       }
     } finally {
@@ -124,6 +167,25 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
     fetchLogs();
   }, [fetchLogs]);
 
+  async function handleConfirmDeleteLog() {
+    if (!deletingLog) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/v1/admin/logs/${deletingLog.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: deleteReason.trim() }),
+      });
+      if (res.ok) {
+        setDeletingLog(null);
+        setDeleteReason("");
+        fetchLogs();
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   function exportData(format: "xlsx" | "csv") {
     const rows = logs.map((l) => ({
       Tanggal: l.attendance_date,
@@ -133,6 +195,7 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
       "Lokasi Check-In": l.check_in_address || "-",
       "Check-Out": formatWibTime(l.check_out_at),
       "Lokasi Check-Out": l.check_out_address || "-",
+      Durasi: computeDurationLabel(l.check_in_at, l.check_out_at),
     }));
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
@@ -156,7 +219,16 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {userRole === "sys_custodian" && (
+            <Link
+              href="/logs/deleted"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Histori Terhapus
+            </Link>
+          )}
           <button
             onClick={() => exportData("csv")}
             disabled={logs.length === 0}
@@ -284,7 +356,7 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
                 <th scope="col" className="px-4 py-3">Anggota</th>
                 <th scope="col" className="px-4 py-3">Check-In</th>
                 <th scope="col" className="px-4 py-3">Check-Out</th>
-                <th scope="col" className="px-4 py-3 text-right">Bukti Foto</th>
+                <th scope="col" className="px-4 py-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -310,9 +382,12 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
                       {log.attendance_date}
                     </th>
                     <td data-label="Anggota" className="px-4 py-3">
-                      <div className="font-semibold text-slate-900">
+                      <Link
+                        href={`/users/${log.user_id}`}
+                        className="font-semibold text-slate-900 hover:text-emerald-700 hover:underline"
+                      >
                         {log.full_name}
-                      </div>
+                      </Link>
                       <div className="text-xs text-slate-500">
                         {log.employee_code}
                       </div>
@@ -334,18 +409,19 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
                       </div>
                     </td>
                     <td
-                      data-label="Bukti Foto"
-                      className="px-4 py-3 text-right space-x-2 whitespace-nowrap"
+                      data-label="Aksi"
+                      className="px-4 py-3 text-right space-x-1.5 whitespace-nowrap"
                     >
                       {log.check_in_tg_file_id && (
                         <button
+                          type="button"
                           onClick={() =>
                             setPreviewPhoto({
                               fileId: log.check_in_tg_file_id!,
                               title: `Check-In • ${log.full_name} (${log.attendance_date})`,
                             })
                           }
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium cursor-pointer"
                         >
                           <ImageIcon className="w-3.5 h-3.5" />
                           In
@@ -353,16 +429,35 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
                       )}
                       {log.check_out_tg_file_id && (
                         <button
+                          type="button"
                           onClick={() =>
                             setPreviewPhoto({
                               fileId: log.check_out_tg_file_id!,
                               title: `Check-Out • ${log.full_name} (${log.attendance_date})`,
                             })
                           }
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-orange-50 text-orange-700 hover:bg-orange-100 text-xs font-medium cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-orange-50 text-orange-700 hover:bg-orange-100 text-xs font-medium cursor-pointer"
                         >
                           <ImageIcon className="w-3.5 h-3.5" />
                           Out
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setDetailLog(log)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Detail
+                      </button>
+                      {userRole === "sys_custodian" && (
+                        <button
+                          type="button"
+                          onClick={() => setDeletingLog(log)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-medium cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Hapus
                         </button>
                       )}
                     </td>
@@ -397,7 +492,7 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
         </div>
       </div>
 
-      {/* Photo Modal (native dialog with closedby="any" + fallback) */}
+      {/* Photo Modal */}
       <dialog
         ref={dialogRef}
         {...({ closedby: "any" } as Record<string, string>)}
@@ -431,6 +526,158 @@ export function LogsClient({ defaultDate }: { defaultDate: string }) {
                 alt={previewPhoto.title}
                 className="max-h-[75vh] object-contain rounded"
               />
+            </div>
+          </div>
+        )}
+      </dialog>
+
+      {/* Detail Absen Modal */}
+      <dialog
+        ref={detailDialogRef}
+        {...({ closedby: "any" } as Record<string, string>)}
+        onClose={() => setDetailLog(null)}
+        className="photo-dialog m-auto rounded-2xl max-w-3xl w-[calc(100%-2rem)] p-0 overflow-hidden shadow-xl border border-slate-200 bg-white"
+      >
+        {detailLog && (
+          <div>
+            <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-base text-slate-900">
+                  Detail Presensi • {detailLog.attendance_date}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {detailLog.full_name} ({detailLog.employee_code}) • Durasi:{" "}
+                  {computeDurationLabel(
+                    detailLog.check_in_at,
+                    detailLog.check_out_at
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailLog(null)}
+                className="p-1 text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[78vh] overflow-y-auto">
+              <div className="space-y-2">
+                <div className="text-xs font-bold uppercase text-emerald-700">
+                  Check-In • {formatWibTime(detailLog.check_in_at)}
+                </div>
+                <p className="text-xs text-slate-600">
+                  {detailLog.check_in_address || "-"}
+                </p>
+                {detailLog.check_in_lat != null &&
+                  detailLog.check_in_lng != null && (
+                    <a
+                      href={`https://maps.google.com/?q=${detailLog.check_in_lat},${detailLog.check_in_lng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:underline"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      Buka Maps ({detailLog.check_in_lat.toFixed(5)},{" "}
+                      {detailLog.check_in_lng.toFixed(5)})
+                    </a>
+                  )}
+                {detailLog.check_in_tg_file_id && (
+                  <img
+                    src={`/api/v1/admin/photos/${encodeURIComponent(
+                      detailLog.check_in_tg_file_id
+                    )}`}
+                    alt="Foto Check-In"
+                    className="w-full rounded-xl border border-slate-200 object-contain max-h-80 bg-slate-950"
+                  />
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs font-bold uppercase text-orange-700">
+                  Check-Out • {formatWibTime(detailLog.check_out_at)}
+                </div>
+                <p className="text-xs text-slate-600">
+                  {detailLog.check_out_address || "-"}
+                </p>
+                {detailLog.check_out_lat != null &&
+                  detailLog.check_out_lng != null && (
+                    <a
+                      href={`https://maps.google.com/?q=${detailLog.check_out_lat},${detailLog.check_out_lng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:underline"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      Buka Maps ({detailLog.check_out_lat.toFixed(5)},{" "}
+                      {detailLog.check_out_lng.toFixed(5)})
+                    </a>
+                  )}
+                {detailLog.check_out_tg_file_id && (
+                  <img
+                    src={`/api/v1/admin/photos/${encodeURIComponent(
+                      detailLog.check_out_tg_file_id
+                    )}`}
+                    alt="Foto Check-Out"
+                    className="w-full rounded-xl border border-slate-200 object-contain max-h-80 bg-slate-950"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </dialog>
+
+      {/* Modal Soft Delete Log Absen */}
+      <dialog
+        ref={deleteDialogRef}
+        {...({ closedby: "any" } as Record<string, string>)}
+        onClose={() => setDeletingLog(null)}
+        className="photo-dialog m-auto rounded-2xl max-w-md w-[calc(100%-2rem)] p-0 overflow-hidden shadow-xl border border-slate-200 bg-white"
+      >
+        {deletingLog && (
+          <div>
+            <div className="p-5 space-y-3">
+              <h2 className="font-bold text-base text-slate-900">
+                Hapus Log Presensi ({deletingLog.attendance_date})?
+              </h2>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Log milik <strong>{deletingLog.full_name}</strong> akan
+                dipindahkan ke <strong>Histori Terhapus</strong> dan karyawan
+                dianggap belum absen pada tanggal tersebut (bisa Check-In
+                ulang).
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Alasan Penghapusan (Opsional)
+                </label>
+                <input
+                  type="text"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Contoh: Foto buram / salah lokasi"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900"
+                />
+              </div>
+            </div>
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingLog(null);
+                  setDeleteReason("");
+                }}
+                className="px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleConfirmDeleteLog}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold disabled:opacity-50 cursor-pointer"
+              >
+                {deleting ? "Menghapus..." : "Ya, Hapus Log"}
+              </button>
             </div>
           </div>
         )}

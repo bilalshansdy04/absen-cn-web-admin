@@ -11,7 +11,7 @@ export default async function LogsPage() {
 
   return (
     <AdminShell user={user}>
-      <LogsClient defaultDate={today} />
+      <LogsClient defaultDate={today} userRole={user.role_code} />
     </AdminShell>
   );
 }

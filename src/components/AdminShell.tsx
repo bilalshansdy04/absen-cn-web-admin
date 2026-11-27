@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  LayoutDashboard,
   ClipboardList,
+  Trash2,
   Users,
   Images,
   Send,
@@ -15,7 +17,12 @@ export interface AdminSessionUser {
   id: string;
   employee_code: string;
   full_name: string;
-  role_code: "sys_custodian" | "fld_coord" | "fld_member";
+  role_code:
+    | "sys_custodian"
+    | "web_admin"
+    | "fld_office"
+    | "fld_coord"
+    | "fld_member";
   role_label: string;
 }
 
@@ -30,11 +37,15 @@ export function AdminShell({
   const router = useRouter();
 
   const navItems = [
+    { href: "/dashboard", label: "Beranda", icon: LayoutDashboard },
     { href: "/logs", label: "Log Kehadiran", icon: ClipboardList },
     { href: "/users", label: "Manajemen Akun", icon: Users },
     { href: "/gallery", label: "Galeri Foto", icon: Images },
     ...(user.role_code === "sys_custodian"
-      ? [{ href: "/settings", label: "API Channel Telegram", icon: Send }]
+      ? [
+          { href: "/logs/deleted", label: "Histori Terhapus", icon: Trash2 },
+          { href: "/settings", label: "API Channel Telegram", icon: Send },
+        ]
       : []),
   ];
 
