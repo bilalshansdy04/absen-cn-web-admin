@@ -4,12 +4,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { ensureDb } from "./db";
 
-export type RoleCode = "sys_custodian" | "fld_coord" | "fld_member";
+export type RoleCode =
+  | "sys_custodian"
+  | "web_admin"
+  | "fld_office"
+  | "fld_coord"
+  | "fld_member";
+
+export const ALL_ROLE_CODES: RoleCode[] = [
+  "sys_custodian",
+  "web_admin",
+  "fld_office",
+  "fld_coord",
+  "fld_member",
+];
+
+export const WEB_ADMIN_ROLES: RoleCode[] = ["sys_custodian", "web_admin"];
+
+export const MOBILE_WORKER_ROLES: RoleCode[] = [
+  "fld_office",
+  "fld_coord",
+  "fld_member",
+];
 
 export const ROLE_LABELS: Record<RoleCode, string> = {
-  sys_custodian: "System Custodian",
-  fld_coord: "Field Coordinator",
-  fld_member: "Field Member",
+  sys_custodian: "Super Admin",
+  web_admin: "Admin Web",
+  fld_office: "Admin Kantor",
+  fld_coord: "Admin Operasional",
+  fld_member: "Operasional / Checker",
 };
 
 export const AUTH_COOKIE_NAME = "presensi_token";
@@ -101,13 +124,13 @@ export async function getAuthUser(req?: NextRequest): Promise<AuthUser | null> {
 
   const db = await ensureDb();
   const res = await db.execute({
-    sql: `SELECT id, employee_code, full_name, role_code, is_first_login, is_active
+    sql: `SELECT id, employee_code, full_name, role_code, is_first_login, is_active, deleted_at
           FROM users WHERE id = ? LIMIT 1`,
     args: [claims.sub],
   });
 
   const row = res.rows[0];
-  if (!row || Number(row.is_active) !== 1) return null;
+  if (!row || Number(row.is_active) !== 1 || row.deleted_at) return null;
 
   return {
     id: String(row.id),

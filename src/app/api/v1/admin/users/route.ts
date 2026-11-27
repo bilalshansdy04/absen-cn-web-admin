@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { ensureDb, getDefaultPassword } from "@/lib/db";
 import {
+  ALL_ROLE_CODES,
   hashPassword,
+  MOBILE_WORKER_ROLES,
   requireRole,
   ROLE_LABELS,
   RoleCode,
+  WEB_ADMIN_ROLES,
 } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireRole(req, ["sys_custodian", "fld_coord"]);
+  const auth = await requireRole(req, WEB_ADMIN_ROLES);
   if ("error" in auth) return auth.error;
 
   const db = await ensureDb();
@@ -46,7 +49,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(req, ["sys_custodian", "fld_coord"]);
+  const auth = await requireRole(req, WEB_ADMIN_ROLES);
   if ("error" in auth) return auth.error;
 
   try {
@@ -67,24 +70,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!["sys_custodian", "fld_coord", "fld_member"].includes(requestedRole)) {
+    if (!ALL_ROLE_CODES.includes(requestedRole)) {
       return NextResponse.json(
         { error: "Role tidak valid." },
         { status: 400 }
       );
     }
 
-    // Enforce RBAC hierarchy from PRD:
-    // sys_custodian -> can create fld_coord & fld_member (and sys_custodian if needed, though PRD says fld_coord & fld_member)
-    // fld_coord -> can ONLY create fld_member
+    // sys_custodian -> semua 5 role; web_admin -> hanya 3 role mobile worker
     if (
-      auth.user.role_code === "fld_coord" &&
-      requestedRole !== "fld_member"
+      auth.user.role_code === "web_admin" &&
+      !MOBILE_WORKER_ROLES.includes(requestedRole)
     ) {
       return NextResponse.json(
         {
           error:
-            "Field Coordinator hanya dapat membuat akun Field Member.",
+            "Admin Web hanya dapat membuat akun lapangan (Admin Kantor, Admin Operasional, Checker).",
         },
         { status: 403 }
       );

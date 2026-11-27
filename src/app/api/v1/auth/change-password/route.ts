@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureDb } from "@/lib/db";
-import { hashPassword, requireRole } from "@/lib/auth";
+import { ALL_ROLE_CODES, hashPassword, requireRole } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(
-    req,
-    ["sys_custodian", "fld_coord", "fld_member"],
-    { allowFirstLogin: true }
-  );
+  const auth = await requireRole(req, ALL_ROLE_CODES, {
+    allowFirstLogin: true,
+  });
   if ("error" in auth) return auth.error;
 
   try {

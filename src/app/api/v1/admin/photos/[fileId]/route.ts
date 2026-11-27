@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth";
+import { requireRole, WEB_ADMIN_ROLES } from "@/lib/auth";
 import { fetchTelegramFile } from "@/lib/telegram";
 
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ fileId: string }> }
 ) {
-  const auth = await requireRole(req, ["sys_custodian", "fld_coord"]);
+  const auth = await requireRole(req, WEB_ADMIN_ROLES);
   if ("error" in auth) return auth.error;
 
   const { fileId } = await context.params;

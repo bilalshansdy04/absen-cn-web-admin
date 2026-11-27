@@ -12,7 +12,7 @@ export async function requireAdminPageSession(options?: {
   if (user.is_first_login) {
     redirect("/change-password");
   }
-  if (user.role_code === "fld_member") {
+  if (!["sys_custodian", "web_admin"].includes(user.role_code)) {
     redirect("/login");
   }
   if (options?.custodianOnly && user.role_code !== "sys_custodian") {

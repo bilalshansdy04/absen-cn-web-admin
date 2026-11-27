@@ -57,9 +57,15 @@ export async function POST(req: NextRequest) {
     }
 
     const roleCode = String(row.role_code) as RoleCode;
-    if (body.client === "web" && roleCode === "fld_member") {
+    if (
+      body.client === "web" &&
+      !["sys_custodian", "web_admin"].includes(roleCode)
+    ) {
       return NextResponse.json(
-        { error: "Akun Field Member hanya dapat mengakses aplikasi mobile." },
+        {
+          error:
+            "Akun lapangan (Admin Kantor / Operasional / Checker) hanya dapat mengakses aplikasi mobile.",
+        },
         { status: 403 }
       );
     }

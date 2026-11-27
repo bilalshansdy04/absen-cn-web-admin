@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureDb, getDefaultPassword } from "@/lib/db";
-import { hashPassword, requireRole, RoleCode } from "@/lib/auth";
+import {
+  hashPassword,
+  MOBILE_WORKER_ROLES,
+  requireRole,
+  RoleCode,
+  WEB_ADMIN_ROLES,
+} from "@/lib/auth";
 
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(req, ["sys_custodian", "fld_coord"]);
+  const auth = await requireRole(req, WEB_ADMIN_ROLES);
   if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
@@ -26,11 +32,14 @@ export async function POST(
   }
 
   const targetRole = String(row.role_code) as RoleCode;
-  if (auth.user.role_code === "fld_coord" && targetRole !== "fld_member") {
+  if (
+    auth.user.role_code === "web_admin" &&
+    !MOBILE_WORKER_ROLES.includes(targetRole)
+  ) {
     return NextResponse.json(
       {
         error:
-          "Field Coordinator hanya dapat mereset kata sandi Field Member.",
+          "Admin Web hanya dapat mereset kata sandi akun lapangan.",
       },
       { status: 403 }
     );

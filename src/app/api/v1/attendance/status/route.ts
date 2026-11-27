@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureDb } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { ALL_ROLE_CODES, requireRole } from "@/lib/auth";
 import { getAttendanceDateString, getWibIsoString } from "@/lib/time";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireRole(req, ["sys_custodian", "fld_coord", "fld_member"]);
+  const auth = await requireRole(req, ALL_ROLE_CODES);
   if ("error" in auth) return auth.error;
 
   const limitParam = Number(req.nextUrl.searchParams.get("days") || "30");

@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureDb } from "@/lib/db";
-import { hashPassword, requireRole, RoleCode } from "@/lib/auth";
+import {
+  ALL_ROLE_CODES,
+  hashPassword,
+  MOBILE_WORKER_ROLES,
+  requireRole,
+  RoleCode,
+  WEB_ADMIN_ROLES,
+} from "@/lib/auth";
 
 export async function PATCH(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(req, ["sys_custodian", "fld_coord"]);
+  const auth = await requireRole(req, WEB_ADMIN_ROLES);
   if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
@@ -35,11 +42,14 @@ export async function PATCH(
     }
 
     const targetRole = String(row.role_code) as RoleCode;
-    if (auth.user.role_code === "fld_coord" && targetRole !== "fld_member") {
+    if (
+      auth.user.role_code === "web_admin" &&
+      !MOBILE_WORKER_ROLES.includes(targetRole)
+    ) {
       return NextResponse.json(
         {
           error:
-            "Field Coordinator hanya dapat mengubah akun Field Member.",
+            "Admin Web hanya dapat mengubah akun lapangan.",
         },
         { status: 403 }
       );
@@ -94,20 +104,20 @@ export async function PATCH(
     }
 
     if (body.role_code !== undefined) {
-      if (!["sys_custodian", "fld_coord", "fld_member"].includes(body.role_code)) {
+      if (!ALL_ROLE_CODES.includes(body.role_code)) {
         return NextResponse.json(
           { error: "Role tidak valid." },
           { status: 400 }
         );
       }
       if (
-        auth.user.role_code === "fld_coord" &&
-        body.role_code !== "fld_member"
+        auth.user.role_code === "web_admin" &&
+        !MOBILE_WORKER_ROLES.includes(body.role_code)
       ) {
         return NextResponse.json(
           {
             error:
-              "Field Coordinator tidak dapat mengubah peran menjadi admin.",
+              "Admin Web tidak dapat mengubah peran menjadi admin web/super admin.",
           },
           { status: 403 }
         );
@@ -160,7 +170,7 @@ export async function DELETE(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(req, ["sys_custodian", "fld_coord"]);
+  const auth = await requireRole(req, WEB_ADMIN_ROLES);
   if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
@@ -186,11 +196,14 @@ export async function DELETE(
   }
 
   const targetRole = String(row.role_code) as RoleCode;
-  if (auth.user.role_code === "fld_coord" && targetRole !== "fld_member") {
+  if (
+    auth.user.role_code === "web_admin" &&
+    !MOBILE_WORKER_ROLES.includes(targetRole)
+  ) {
     return NextResponse.json(
       {
         error:
-          "Field Coordinator hanya dapat menghapus akun Field Member.",
+          "Admin Web hanya dapat menghapus akun lapangan.",
       },
       { status: 403 }
     );

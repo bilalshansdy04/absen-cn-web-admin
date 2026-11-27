@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureDb } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import {
+  ALL_ROLE_CODES,
+  MOBILE_WORKER_ROLES,
+  requireRole,
+} from "@/lib/auth";
 import { fetchTelegramFile } from "@/lib/telegram";
 
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ fileId: string }> }
 ) {
-  const auth = await requireRole(req, [
-    "sys_custodian",
-    "fld_coord",
-    "fld_member",
-  ]);
+  const auth = await requireRole(req, ALL_ROLE_CODES);
   if ("error" in auth) return auth.error;
 
   const { fileId } = await context.params;
@@ -19,8 +19,8 @@ export async function GET(
     return NextResponse.json({ error: "fileId wajib diisi." }, { status: 400 });
   }
 
-  // Pastikan member hanya dapat melihat foto presensi miliknya sendiri
-  if (auth.user.role_code === "fld_member") {
+  // Pastikan pekerja lapangan hanya dapat melihat foto presensi miliknya sendiri
+  if (MOBILE_WORKER_ROLES.includes(auth.user.role_code)) {
     const db = await ensureDb();
     const owned = await db.execute({
       sql: `SELECT id FROM attendance_logs

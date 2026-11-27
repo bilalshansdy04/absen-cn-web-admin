@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { ensureDb } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { ALL_ROLE_CODES, requireRole } from "@/lib/auth";
 import {
   getAttendanceDateString,
   getWibDisplayDateTime,
@@ -13,7 +13,7 @@ import { sendTelegramDocument } from "@/lib/telegram";
 const MAX_PHOTO_BYTES = 4 * 1024 * 1024; // 4 MB (aman di bawah limit 4.5 MB Vercel)
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(req, ["sys_custodian", "fld_coord", "fld_member"]);
+  const auth = await requireRole(req, ALL_ROLE_CODES);
   if ("error" in auth) return auth.error;
 
   try {
